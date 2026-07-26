@@ -1,4 +1,4 @@
-import shutil, json, glob
+import json, glob
 
 import tensorflow as tf
 import numpy as np
@@ -10,19 +10,18 @@ from pathlib import Path
 class MonitorModel:
 
 	MONITORING_DIR = "monitoring"
-	TEMP_DIR = "temp"
 
 	def __init__(self, model_name, major_version):
 		self.model_name = model_name
 		self.major_version = major_version
 
-	def train(self, model, X_train, y_train, X_test, y_test, nb_epoch = 300):
+	def train(self, model, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
 		full_name = self.next_name()
 		print(f"Model: {full_name}")
 		classes = np.unique(y_train)
 		print(f"Detected classes: {classes}")
 
-		monitoring_data = self.__train_model(model, full_name, X_train, y_train, X_test, y_test, nb_epoch)
+		monitoring_data = self.__train_model(model, full_name, X_train, y_train, X_test, y_test, nb_epoch, callbacks)
 
 		monitoring_path = f"{MonitorModel.MONITORING_DIR}/{full_name}"
 		self.__save_all(monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test)
@@ -35,14 +34,8 @@ class MonitorModel:
 		return f"{major_name}_{format(version, '02d')}"
 
 
-	def __train_model(self, model, full_name, X_train, y_train, X_test, y_test, nb_epoch = 300):
-		logs_path = f"{MonitorModel.TEMP_DIR}/{full_name}"
-		shutil.rmtree(MonitorModel.TEMP_DIR, ignore_errors=True)
-		tensorboard_callback = tf.keras.callbacks.TensorBoard(
-			log_dir=logs_path
-		)
-
-		monitoring_data = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epoch, verbose=2, callbacks=[tensorboard_callback])
+	def __train_model(self, model, full_name, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
+		monitoring_data = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epoch, verbose=2, callbacks=callbacks)
 		model.evaluate(X_test, y_test, verbose=2)
 
 		Path("models").mkdir(parents=True, exist_ok=True)

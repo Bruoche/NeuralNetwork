@@ -1,4 +1,4 @@
-import os
+import os, shutil
 
 import tensorflow as tf
 import numpy as np
@@ -24,5 +24,16 @@ model.compile(
     metrics = ["accuracy"]
 )
 
+shutil.rmtree("temp", ignore_errors=True)
+tensorboard_callback = tf.keras.callbacks.TensorBoard(
+	log_dir="temp"
+)
+early_stopping = tf.keras.callbacks.EarlyStopping(
+	monitor='val_loss',
+	patience=5,
+	restore_best_weights=True,
+	verbose=1
+)
+
 monitor = MonitorModel("mnist_simple", 1)
-monitor.train(model, X_train, y_train, X_test, y_test, nb_epoch=15)
+monitor.train(model, X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[tensorboard_callback, early_stopping])
