@@ -1,4 +1,4 @@
-import json, glob
+import os, json, glob
 
 import tensorflow as tf
 import numpy as np
@@ -10,13 +10,15 @@ from pathlib import Path
 class MonitorModel:
 
 	MONITORING_DIR = "monitoring"
+	MODELS_DIR = "models"
+	MAX_RETRIES = 5
 
 	def __init__(self, model_name, major_version):
 		self.model_name = model_name
 		self.major_version = major_version
 
 	def train(self, model, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
-		full_name = self.next_name()
+		full_name = self.__next_name()
 		print(f"Model: {full_name}")
 		classes = np.unique(y_train)
 		print(f"Detected classes: {classes}")
@@ -28,11 +30,18 @@ class MonitorModel:
 		self.__save_model_params(model, full_name, len(monitoring_data.history["loss"]), classes, callbacks, monitoring_path)
 		print("All file saved!")
 
-	def next_name(self):
-		major_name = f"{self.model_name}_{format(self.major_version, '02d')}"
-		version = len(glob.glob(f"models/{major_name}_*"))
-		return f"{major_name}_{format(version, '02d')}"
 
+	def __next_name(self, retry = 0):
+		major_name = f"{self.model_name}_{format(self.major_version, '02d')}"
+		version = len(glob.glob(f"{MonitorModel.MODELS_DIR}/{major_name}_*"))
+		full_name = f"{major_name}_{format(version, '02d')}"
+		try:
+			open(f"{MonitorModel.MODELS_DIR}/{full_name}.claim", 'x').close()
+		except FileExistsError:
+			if retry > MonitorModel.MAX_RETRIES:
+				raise ValueError(f"Failed to claim a version for the model after {retry} retries.")
+			return self.__next_name(retry+1)
+		return full_name
 
 	def __train_model(self, model, full_name, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
 		monitoring_data = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epoch, verbose=2, callbacks=callbacks)
@@ -42,6 +51,8 @@ class MonitorModel:
 		save_path = f"models/{full_name}.keras"
 		model.save(save_path)
 		print(f"\"{save_path}\" saved.")
+		try: os.remove(f"{MonitorModel.MODELS_DIR}/{full_name}.claim")
+		except OSError: pass
 		return monitoring_data
 
 	def __save_all(self, monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test):
