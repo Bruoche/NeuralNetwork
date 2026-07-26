@@ -37,3 +37,4 @@ early_stopping = tf.keras.callbacks.EarlyStopping(
 
 monitor = MonitorModel("mnist_simple", 1)
 monitor.train(model, X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[tensorboard_callback, early_stopping])
+

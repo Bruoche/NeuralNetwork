@@ -25,7 +25,7 @@ class MonitorModel:
 
 		monitoring_path = f"{MonitorModel.MONITORING_DIR}/{full_name}"
 		self.__save_all(monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test)
-		self.__save_model_params(model, full_name, nb_epoch, classes, monitoring_path)
+		self.__save_model_params(model, full_name, len(monitoring_data.history["loss"]), classes, callbacks, monitoring_path)
 		print("All file saved!")
 
 	def next_name(self):
@@ -70,11 +70,12 @@ class MonitorModel:
 		Path(monitoring_path).mkdir(parents=True, exist_ok=True)
 		monitor_dataframe.to_csv(f"{monitoring_path}/{title}.csv", index=False)
 
-	def __save_model_params(self, model, full_name, nb_epoch, classes, monitoring_path):
+	def __save_model_params(self, model, full_name, nb_epoch, classes, callbacks, monitoring_path):
 		model_params = {
 			"model": full_name,
 			"epochs": nb_epoch,
 			"classes": classes,
+			"callbacks": callbacks,
 			"shape": {
 				"input": model.input_shape[1:]
 			}
@@ -108,5 +109,5 @@ class MonitorModel:
 
 	def __serialize(self, value):
 		if hasattr(value, "tolist"):
-			return value.tolist
+			return value.tolist()
 		return str(value)
