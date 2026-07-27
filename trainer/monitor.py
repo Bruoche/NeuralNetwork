@@ -1,5 +1,8 @@
 import os, json, glob
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 import tensorflow as tf
 import numpy as np
 import pandas
@@ -56,6 +59,7 @@ class MonitorModel:
 		return monitoring_data
 
 	def __save_all(self, monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test):
+		# Per epoch metrics
 		training_evolution = (
 			pandas.DataFrame(monitoring_data.history)
 				.rename_axis("epoch")
@@ -63,7 +67,7 @@ class MonitorModel:
 		)
 		training_evolution.insert(0, "model", full_name)
 		self.__save_one(training_evolution, "metrics", monitoring_path)
-
+		# Convolution matrix
 		prediction = np.argmax(model.predict(X_test, verbose=0), axis=1)
 		confusion_matrix = sklearn.metrics.confusion_matrix(y_test, prediction, labels=range(len(classes)))
 		confusion_data = []
@@ -87,6 +91,7 @@ class MonitorModel:
 			"epochs": nb_epoch,
 			"classes": classes,
 			"callbacks": callbacks,
+			"learning_rate": float(model.optimizer.learning_rate.numpy()),
 			"shape": {
 				"input": model.input_shape[1:]
 			}
