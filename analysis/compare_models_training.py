@@ -1,4 +1,5 @@
 import os, sys, glob, re
+import consts
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -9,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from trainer.monitor import MonitorModel
 from pathlib import Path
 
-GRAPHS_DIR = "graphs"
 METRIC_SHOWN = "val_loss"
 
 prefix = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -38,9 +38,9 @@ min, max = ax.get_ylim()
 ax.set_ylim(max, min)
 
 plt.tight_layout()
-Path(GRAPHS_DIR).mkdir(parents=True, exist_ok=True)
+Path(consts.GRAPHS_DIR).mkdir(parents=True, exist_ok=True)
 normalized_prefix = re.sub(r'[^\w.-]', "_", prefix).strip("_").lstrip("_")
 if not normalized_prefix:
 	normalized_prefix = "all"
-plt.savefig(f"{GRAPHS_DIR}/comparison_{normalized_prefix}_loss.png", dpi=150)
+plt.savefig(f"{consts.GRAPHS_DIR}/comparison_{normalized_prefix}_loss.png", dpi=150)
 plt.show()

@@ -1,4 +1,5 @@
-import os, sys, glob, re
+import os, sys, glob
+import consts
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -8,8 +9,6 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from trainer.monitor import MonitorModel
 from pathlib import Path
-
-GRAPHS_DIR = "graphs"
 
 prefix = sys.argv[1] if len(sys.argv) > 1 else ""
 paths = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/{prefix}*/metrics.csv"))
@@ -31,6 +30,6 @@ for i, metric in enumerate(["loss", "accuracy"]):
 	ax.set_yscale("log")
 
 plt.tight_layout()
-Path(GRAPHS_DIR).mkdir(parents=True, exist_ok=True)
-plt.savefig(f"{GRAPHS_DIR}/metrics_{model}.png", dpi=150)
+Path(consts.GRAPHS_DIR).mkdir(parents=True, exist_ok=True)
+plt.savefig(f"{consts.GRAPHS_DIR}/metrics_{model}.png", dpi=150)
 plt.show()
