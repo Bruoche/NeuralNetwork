@@ -26,7 +26,9 @@ optionalConvolution = combination.Options([[
 weights = combination.Options([32, 64, 128, 256])
 learning_rates = combination.Options([0.00003, 0.00005, 0.0001])
 
-for i in combination.Iterator([weights, learning_rates, optionalConvolution, optionalTranslation, optionalRotation, optionalZoom]):
+iterator = combination.Iterator([weights, learning_rates, optionalConvolution, optionalTranslation, optionalRotation, optionalZoom])
+for i in iterator:
+	print(f"Doing combination {i}/{iterator.nb_combinations()}")
 	model = tf.keras.Sequential([
 		tf.keras.layers.Input(shape=(28,28, 1))] 
 		+ optionalRotation.get()

@@ -43,3 +43,12 @@ class Iterator:
 			looped = self.combinations[index].next()
 			index += 1
 		return iteration
+
+	def nb_combinations(self):
+		if len(self.combinations) <= 0:
+			return 0
+		else:
+			nb = 1
+			for combination in self.combinations:
+				nb = nb * len(combination.values)
+			return nb
