@@ -20,8 +20,9 @@ model = all_metrics["model"][0]
 fig, axes = plt.subplots(1, 2, figsize=(8, 5))
 for i, metric in enumerate(["loss", "accuracy"]):
 	ax = axes[i]
-	ax.plot(all_metrics["epoch"], all_metrics["val_" + metric], label="test")
-	ax.plot(all_metrics["epoch"], all_metrics[metric], label="train")
+	test_metric = f"val_{metric}"
+	ax.plot(all_metrics["epoch"], all_metrics[test_metric], label=f"{all_metrics[test_metric].min():.4f}: test")
+	ax.plot(all_metrics["epoch"], all_metrics[metric], label=f"{all_metrics[metric].min():.4f}: train")
 	ax.set_xlabel("Epoch")
 	ax.set_ylabel(str.capitalize(metric))
 	ax.set_title(f"{model} - {metric}")
