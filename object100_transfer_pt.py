@@ -34,18 +34,22 @@ if device == "cuda":
 	print(torch.cuda.get_device_name())
 
 optionalDepth = combination.Options([
+	[],
+	[64, 64],
+	[128, 128],
+	[256, 256],
 	[64],
 	[128],
-	[256],
-	[512]
+	[256]
 ])
-optionalFlip = combination.Options([[], [transforms.RandomHorizontalFlip()]])
-optionalFlipVertical = combination.Options([[], [transforms.RandomVerticalFlip()]])
-optionalRotation = combination.Options([[], [transforms.RandomRotation(0.15 * 360)]])
-optionalTranslation = combination.Options([(0.0, 0.0), (0.1, 0.1)])
+optionalFlip = combination.Options([[]])
+optionalFlipVertical = combination.Options([[]])
+optionalRotation = combination.Options([0.15, 0.1, 0.05, 0.2, 0.0])
+optionalTranslation = combination.Options([(0.1, 0.1), (0.05, 0.05), (0.2, 0.2), (0.0, 0.0)])
 optionalScale = combination.Options([(1.0, 1.0), (0.9, 1.1)])
-learning_rates = combination.Options([0.001, 0.0007, 0.0005])
-iterator = combination.Iterator([optionalDepth, learning_rates, optionalFlip, optionalRotation, optionalTranslation, optionalScale, optionalFlipVertical])
+learning_rates = combination.Options([0.001])
+optionalFineTune = combination.Options([3, 2, 4, 0])
+iterator = combination.Iterator([optionalDepth, learning_rates, optionalFlip, optionalRotation, optionalTranslation, optionalScale, optionalFlipVertical, optionalFineTune])
 for i in iterator:
 	print(f"Doing combination {i}/{iterator.nb_combinations()}")
 
@@ -53,15 +57,16 @@ for i in iterator:
 		num_classes=len(class_names),
 		augment=[transforms.RandomAffine(degrees=0, translate=optionalTranslation.get(), scale=optionalScale.get())]
 			+ optionalFlip.get()
-			+ optionalRotation.get()
+			+ [transforms.RandomRotation(optionalRotation.get() * 360)]
 			+ optionalFlipVertical.get(),
-		hidden=optionalDepth.get()+optionalDepth.get(),
+		hidden=optionalDepth.get(),
 		lr=learning_rates.get(),
 		device=device,
-		patience=10
+		patience=10,
+		fine_tune=optionalFineTune.get()
 	)
 
-	monitor = MonitorModel("object100_pt_mobilenet_v2", 1)
+	monitor = MonitorModel("object100_pt_mobilenet_v2", 2)
 	monitor.train(
 		model, X_train, y_train, X_test, y_test,
 		nb_epoch=300,

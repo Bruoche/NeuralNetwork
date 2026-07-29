@@ -128,7 +128,7 @@ class TorchModel(Model):
 					 "kernel_size", "sigma", "distortion_scale")
 
 	def __init__(self, num_classes, augment=[], hidden=[], lr=1e-3,
-				 device=None, patience=5):
+				 device=None, patience=5, fine_tune=0, fine_tune_lr=None):
 		import torch
 		from torch import nn
 		from torchvision import models, transforms
@@ -140,13 +140,21 @@ class TorchModel(Model):
 		self.lr = lr
 		self.patience = patience
 		self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+		# fine_tune = number of trailing MobileNetV2 feature blocks to unfreeze
+		# and train (0 = pure transfer learning, backbone fully frozen). The
+		# unfrozen weights train at fine_tune_lr, defaulting to lr/10 (a low
+		# rate avoids wrecking the pretrained features on a small dataset).
+		self.fine_tune = fine_tune
+		self.fine_tune_lr = fine_tune_lr if fine_tune_lr is not None else lr / 10
 
 		weights = models.MobileNet_V2_Weights.IMAGENET1K_V1
 		base = models.mobilenet_v2(weights=weights)
-		self.backbone = base.features                 # frozen conv feature extractor
+		self.backbone = base.features                 # conv feature extractor
 		for p in self.backbone.parameters():
-			p.requires_grad = False
-		self.backbone.eval()                          # keep BatchNorm stats frozen
+			p.requires_grad = False                    # phase 1: backbone fully frozen
+		# backbone stays in eval() at all times so its BatchNorm running stats
+		# remain frozen even while fine-tuning (matches keras base(training=False))
+		self.backbone.eval()
 		self.pool = nn.AdaptiveAvgPool2d(1)           # GlobalAveragePooling2D -> 1280
 
 		head_layers = []
@@ -163,7 +171,9 @@ class TorchModel(Model):
 		self.pool.to(self.device)
 		self.head.to(self.device)
 
-		self.optimizer = torch.optim.Adam(self.head.parameters(), lr=lr)  # only head trains
+		# phase 1 optimizer trains the head only; fine-tuning (phase 2) rebuilds
+		# it to also include the unfrozen backbone blocks (see fit / __enable_fine_tuning)
+		self.optimizer = torch.optim.Adam(self.head.parameters(), lr=lr)
 		self.loss_fn = nn.CrossEntropyLoss()
 
 		# preprocessing: normalize with the backbone's own ImageNet stats
@@ -248,14 +258,42 @@ class TorchModel(Model):
 		return total_loss / count, correct / count
 
 	# --- Model interface ---------------------------------------------------
-	def fit(self, X_train, y_train, X_test, y_test, nb_epoch, callbacks=[]) -> dict:
-		import copy
-		train_loader = self.__loader(X_train, y_train, train=True)
-		val_loader = self.__loader(X_test, y_test, train=False)
-		history = {"accuracy": [], "loss": [], "val_accuracy": [], "val_loss": []}
+	def __backbone_trainable(self):
+		return any(p.requires_grad for p in self.backbone.parameters())
 
-		best_val_loss = float("inf")
-		best_state = copy.deepcopy(self.head.state_dict())
+	def __snapshot(self):
+		import copy
+		# snapshot the backbone too once it has unfrozen (fine-tuning) weights,
+		# so restoring the best epoch keeps head and backbone in sync
+		state = {"head": copy.deepcopy(self.head.state_dict())}
+		if self.__backbone_trainable():
+			state["backbone"] = copy.deepcopy(self.backbone.state_dict())
+		return state
+
+	def __restore(self, state):
+		self.head.load_state_dict(state["head"])
+		if "backbone" in state:
+			self.backbone.load_state_dict(state["backbone"])
+
+	def __enable_fine_tuning(self):
+		# unfreeze the top `fine_tune` blocks and rebuild the optimizer so the
+		# head keeps training at lr while the backbone trains at fine_tune_lr
+		blocks = list(self.backbone.children())
+		for block in blocks[len(blocks) - self.fine_tune:]:
+			for p in block.parameters():
+				p.requires_grad = True
+		param_groups = [
+			{"params": self.head.parameters(), "lr": self.lr},
+			{"params": [p for p in self.backbone.parameters() if p.requires_grad],
+			 "lr": self.fine_tune_lr},
+		]
+		self.optimizer = self._torch.optim.Adam(param_groups)
+
+	def __train_phase(self, label, train_loader, val_loader, history, nb_epoch,
+					  best_val_loss, best_state):
+		# one training phase with EarlyStopping(monitor=val_loss, patience,
+		# restore_best_weights). best_val_loss/best_state carry across phases so
+		# phase 2 can only improve on phase 1, never regress.
 		wait = 0
 		for epoch in range(nb_epoch):
 			tr_loss, tr_acc = self.__run_epoch(train_loader, train=True)
@@ -264,19 +302,39 @@ class TorchModel(Model):
 			history["accuracy"].append(tr_acc)
 			history["val_loss"].append(va_loss)
 			history["val_accuracy"].append(va_acc)
-			print(f"Epoch {epoch + 1}/{nb_epoch} - loss: {tr_loss:.4f} - accuracy: {tr_acc:.4f}"
+			print(f"[{label}] Epoch {len(history['loss'])} - loss: {tr_loss:.4f} - accuracy: {tr_acc:.4f}"
 				  f" - val_loss: {va_loss:.4f} - val_accuracy: {va_acc:.4f}")
-			# EarlyStopping(monitor='val_loss', patience, restore_best_weights=True)
 			if va_loss < best_val_loss:
 				best_val_loss = va_loss
-				best_state = copy.deepcopy(self.head.state_dict())
+				best_state = self.__snapshot()
 				wait = 0
 			else:
 				wait += 1
 				if wait >= self.patience:
-					print(f"Epoch {epoch + 1}: early stopping")
+					print(f"[{label}] Epoch {epoch + 1}: early stopping")
 					break
-		self.head.load_state_dict(best_state)
+		return best_val_loss, best_state
+
+	def fit(self, X_train, y_train, X_test, y_test, nb_epoch, callbacks=[]) -> dict:
+		train_loader = self.__loader(X_train, y_train, train=True)
+		val_loader = self.__loader(X_test, y_test, train=False)
+		history = {"accuracy": [], "loss": [], "val_accuracy": [], "val_loss": []}
+
+		# Phase 1: backbone frozen, train the head to its best (protects the
+		# pretrained features from the large gradients of a fresh random head).
+		best_val_loss, best_state = self.__train_phase(
+			"frozen", train_loader, val_loader, history, nb_epoch, float("inf"), None)
+		self.__restore(best_state)
+
+		# Phase 2: unfreeze the top blocks and fine-tune at a lower lr, starting
+		# from (and never losing) the best phase-1 weights.
+		if self.fine_tune > 0:
+			self.__enable_fine_tuning()
+			best_val_loss, best_state = self.__train_phase(
+				"fine-tune", train_loader, val_loader, history, nb_epoch,
+				best_val_loss, self.__snapshot())
+
+		self.__restore(best_state)
 		return history
 
 	def evaluate(self, X_test, y_test) -> None:
@@ -299,12 +357,16 @@ class TorchModel(Model):
 
 	def save(self, path_without_extension) -> str:
 		save_path = f"{path_without_extension}.pt"
-		self._torch.save({
+		data = {
 			"head": self.head.state_dict(),
 			"num_classes": self.num_classes,
 			"hidden": self.hidden,
 			"augment": self.describe_augments(),
-		}, save_path)
+			"fine_tune": self.fine_tune,
+		}
+		if self.fine_tune > 0:  # unfrozen backbone weights changed, keep them
+			data["backbone"] = self.backbone.state_dict()
+		self._torch.save(data, save_path)
 		return save_path
 
 	def learning_rate(self) -> float:
@@ -320,7 +382,9 @@ class TorchModel(Model):
 			"type": "MobileNetV2",
 			"base_model": "mobilenet_v2",
 			"size": sum(p.numel() for p in self.backbone.parameters()),
-			"trainable": False,
+			"trainable": self.fine_tune > 0,
+			"fine_tune_blocks": self.fine_tune,
+			"fine_tune_lr": self.fine_tune_lr if self.fine_tune > 0 else None,
 		})
 		layers.append({"type": "GlobalAveragePooling2D"})
 		for h in self.hidden:
