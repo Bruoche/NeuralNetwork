@@ -47,18 +47,70 @@ class Model(ABC):
 class TensorModel(Model):
 	"""Model implementation wrapping a compiled tf.keras model."""
 
-	def __init__(self, keras_model):
+	def __init__(self, keras_model, base=None, fine_tune=0, fine_tune_lr=None, patience=5):
 		self.model = keras_model
+		self.base = base
+		self.fine_tune = fine_tune
+		self.patience = patience
+		# capture the phase-1 (head) learning rate now; phase 2 recompiles the
+		# optimizer at a lower rate, so read it here to keep learning_rate() stable
+		self.lr = float(keras_model.optimizer.learning_rate.numpy())
+		self.fine_tune_lr = fine_tune_lr if fine_tune_lr is not None else self.lr / 10
 
 	def fit(self, X_train, y_train, X_test, y_test, nb_epoch, callbacks=[]) -> dict:
-		history = self.model.fit(
+		import tensorflow as tf
+		# Phase 1: base frozen, train as compiled (caller supplies EarlyStopping)
+		history = dict(self.model.fit(
 			X_train, y_train,
 			validation_data=(X_test, y_test),
-			epochs=nb_epoch,
-			verbose=2,
-			callbacks=callbacks
-		)
-		return history.history
+			epochs=nb_epoch, verbose=2, callbacks=callbacks).history)
+
+		# Phase 2: unfreeze the top blocks and fine-tune at a lower lr
+		if self.fine_tune > 0 and self.base is not None:
+			phase1_best = min(history.get("val_loss", [float("inf")]))
+			phase1_weights = self.model.get_weights()
+			self.__enable_fine_tuning()
+			early = tf.keras.callbacks.EarlyStopping(
+				monitor="val_loss", patience=self.patience,
+				restore_best_weights=True, verbose=1)
+			h2 = self.model.fit(
+				X_train, y_train,
+				validation_data=(X_test, y_test),
+				epochs=nb_epoch, verbose=2, callbacks=[early]).history
+			for k in history:
+				history[k] = history[k] + h2.get(k, [])
+			# never regress below phase 1 (mirror TorchModel)
+			if min(h2.get("val_loss", [float("inf")])) > phase1_best:
+				self.model.set_weights(phase1_weights)
+		return history
+
+	def __group_of(self, name):
+		# group EfficientNet layer names into blocks comparable to torchvision's
+		# .features children: stem, block1..block7, top
+		if name.startswith("stem"): return "stem"
+		if name.startswith("top"): return "top"
+		if name.startswith("block") and len(name) > 5 and name[5].isdigit():
+			return "block" + name[5]
+		return None
+
+	def __enable_fine_tuning(self):
+		import tensorflow as tf
+		groups = []
+		for layer in self.base.layers:
+			g = self.__group_of(layer.name)
+			if g and g not in groups:
+				groups.append(g)
+		keep = set(groups[-self.fine_tune:]) if self.fine_tune <= len(groups) else set(groups)
+		self.base.trainable = True
+		for layer in self.base.layers:
+			# unfreeze layers in the top blocks, but keep BatchNorm frozen so its
+			# running stats don't move (mirrors keras base(training=False) / torch)
+			in_block = self.__group_of(layer.name) in keep
+			layer.trainable = in_block and not isinstance(layer, tf.keras.layers.BatchNormalization)
+		self.model.compile(
+			loss=self.model.loss,
+			optimizer=tf.keras.optimizers.Adam(self.fine_tune_lr),
+			metrics=["accuracy"])
 
 	def evaluate(self, X_test, y_test) -> None:
 		self.model.evaluate(X_test, y_test, verbose=2)
@@ -72,13 +124,18 @@ class TensorModel(Model):
 		return save_path
 
 	def learning_rate(self) -> float:
-		return float(self.model.optimizer.learning_rate.numpy())
+		return self.lr
 
 	def input_shape(self):
 		return self.model.input_shape[1:]
 
 	def describe_layers(self) -> list[dict]:
-		return [self.__describe(layer) for layer in self.model.layers]
+		layers = [self.__describe(layer) for layer in self.model.layers]
+		for desc in layers:            # annotate the base with fine-tuning info
+			if "base_model" in desc:
+				desc["fine_tune_blocks"] = self.fine_tune
+				desc["fine_tune_lr"] = self.fine_tune_lr if self.fine_tune > 0 else None
+		return layers
 
 	def __describe(self, layer) -> dict:
 		t = type(layer).__name__

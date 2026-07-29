@@ -37,7 +37,7 @@ optionalFlip = combination.Options([0, 0.5])
 optionalFlipVertical = combination.Options([[]])
 optionalRotation = combination.Options([0.15])
 optionalTranslation = combination.Options([(0.1, 0.1)])
-optionalScale = combination.Options([(0.9, 1.1)])
+optionalScale = combination.Options([0.1])
 optionalDepth = combination.Options([
 	[],
 	[64],
@@ -57,7 +57,7 @@ for i in iterator:
 	base, base_weights = optionalBase.get()
 	model = TorchModel(
 		num_classes=len(class_names),
-		augment=[transforms.RandomAffine(degrees=0, translate=optionalTranslation.get(), scale=optionalScale.get())]
+		augment=[transforms.RandomAffine(degrees=0, translate=optionalTranslation.get(), scale=(1-optionalScale.get(), 1+optionalScale.get()))]
 			+ [transforms.RandomHorizontalFlip(optionalFlip.get())]
 			+ [transforms.RandomRotation(optionalRotation.get() * 360)]
 			+ optionalFlipVertical.get(),
