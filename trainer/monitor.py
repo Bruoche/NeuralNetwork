@@ -11,6 +11,7 @@ from trainer.model import Model
 
 class MonitorModel:
 
+	CLAIM_DIR = "versions"
 	MONITORING_DIR = "monitoring"
 	MODELS_DIR = "models"
 	MAX_RETRIES = 5
@@ -38,10 +39,10 @@ class MonitorModel:
 
 	def __next_name(self, retry = 0):
 		major_name = f"{self.model_name}_{format(self.major_version, '02d')}"
-		version = len(glob.glob(f"{self.__model_directory()}/{major_name}_*"))
+		version = len(glob.glob(f"{self.CLAIM_DIR}/{major_name}_*"))
 		full_name = f"{major_name}_{format(version, '02d')}"
-		claim_path = f"versions/{full_name}.claim"
-		Path(claim_path).mkdir(parents=True, exist_ok=True)
+		claim_path = f"{MonitorModel.CLAIM_DIR}/{full_name}.claim"
+		Path(MonitorModel.CLAIM_DIR).mkdir(parents=True, exist_ok=True)
 		try:
 			open(claim_path, 'x').close()
 		except FileExistsError:
