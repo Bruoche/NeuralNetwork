@@ -1,0 +1,51 @@
+{
+    "model": "object100_tf_mobilenet_v2_00_03",
+    "epochs": 149,
+    "classes": [
+        "ecouteurs",
+        "keycap-puller",
+        "other",
+        "pc-stand",
+        "porte-mine"
+    ],
+    "callbacks": [
+        "<keras.src.callbacks.early_stopping.EarlyStopping object at 0x000002140B865150>"
+    ],
+    "learning_rate": 4.999999873689376e-05,
+    "shape": {
+        "input": [
+            204,
+            153,
+            3
+        ],
+        "layer_0": {
+            "type": "RandomFlip"
+        },
+        "layer_1": {
+            "type": "RandomRotation"
+        },
+        "layer_2": {
+            "type": "RandomZoom"
+        },
+        "layer_3": {
+            "type": "RandomTranslation"
+        },
+        "layer_4": {
+            "type": "Rescaling"
+        },
+        "layer_5": {
+            "type": "Functional"
+        },
+        "layer_6": {
+            "type": "GlobalAveragePooling2D"
+        },
+        "layer_7": {
+            "type": "Dropout",
+            "rate": 0.3
+        },
+        "layer_8": {
+            "type": "Dense",
+            "size": 5
+        }
+    }
+}

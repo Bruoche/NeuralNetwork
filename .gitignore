@@ -2,3 +2,7 @@
 temp
 */mnist*
 graphs
+models/
+__pycache__/
+*.pyc
+datasets

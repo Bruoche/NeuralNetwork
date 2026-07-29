@@ -1,0 +1,92 @@
+{
+    "model": "object100_tf_train_01_02",
+    "epochs": 6,
+    "classes": [
+        0,
+        1,
+        2,
+        3,
+        4
+    ],
+    "callbacks": [
+        "<keras.src.callbacks.early_stopping.EarlyStopping object at 0x00000196F56B9870>"
+    ],
+    "learning_rate": 0.0010000000474974513,
+    "shape": {
+        "input": [
+            512,
+            384,
+            3
+        ],
+        "layer_0": {
+            "type": "RandomRotation"
+        },
+        "layer_1": {
+            "type": "RandomZoom"
+        },
+        "layer_2": {
+            "type": "RandomTranslation"
+        },
+        "layer_3": {
+            "type": "Conv2D",
+            "size": 32,
+            "kernel": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ]
+        },
+        "layer_4": {
+            "type": "MaxPooling2D",
+            "pool": [
+                2,
+                2
+            ]
+        },
+        "layer_5": {
+            "type": "Conv2D",
+            "size": 64,
+            "kernel": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ]
+        },
+        "layer_6": {
+            "type": "MaxPooling2D",
+            "pool": [
+                2,
+                2
+            ]
+        },
+        "layer_7": {
+            "type": "Flatten"
+        },
+        "layer_8": {
+            "type": "Dense",
+            "size": 256
+        },
+        "layer_9": {
+            "type": "Dropout",
+            "rate": 0.3
+        },
+        "layer_10": {
+            "type": "Dense",
+            "size": 256
+        },
+        "layer_11": {
+            "type": "Dropout",
+            "rate": 0.2
+        },
+        "layer_12": {
+            "type": "Dense",
+            "size": 5
+        }
+    }
+}

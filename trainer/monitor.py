@@ -1,14 +1,13 @@
-import os, json, glob
+import os, json, glob, time
+from datetime import timedelta
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
-import tensorflow as tf
 import numpy as np
 import pandas
 import sklearn
 import itertools
 from pathlib import Path
+
+from trainer.model import Model
 
 class MonitorModel:
 
@@ -20,18 +19,20 @@ class MonitorModel:
 		self.model_name = model_name
 		self.major_version = major_version
 
-	def train(self, model, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
+	def train(self, model: Model, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[], class_names=None):
 		Path(self.__model_directory()).mkdir(parents=True, exist_ok=True)
 		full_name = self.__next_name()
 		print(f"Model: {full_name}")
 		classes = np.unique(y_train)
-		print(f"Detected classes: {classes}")
+		if class_names is None:
+			class_names = [str(c) for c in classes]
+		print(f"Detected classes: {class_names}")
 
-		monitoring_data = self.__train_model(model, full_name, X_train, y_train, X_test, y_test, nb_epoch, callbacks)
+		history, duration = self.__train_model(model, full_name, X_train, y_train, X_test, y_test, nb_epoch, callbacks)
 
 		monitoring_path = f"{MonitorModel.MONITORING_DIR}/{self.model_name}/{full_name}"
-		self.__save_all(monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test)
-		self.__save_model_params(model, full_name, len(monitoring_data.history["loss"]), classes, callbacks, monitoring_path)
+		self.__save_all(history, full_name, classes, class_names, monitoring_path, model, X_test, y_test)
+		self.__save_model_params(model, full_name, len(history["loss"]), class_names, callbacks, monitoring_path, duration)
 		print("All file saved!")
 
 
@@ -50,35 +51,36 @@ class MonitorModel:
 	def __model_directory(self):
 		return f"{MonitorModel.MODELS_DIR}/{self.model_name}"
 
-	def __train_model(self, model, full_name, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
-		monitoring_data = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epoch, verbose=2, callbacks=callbacks)
-		model.evaluate(X_test, y_test, verbose=2)
+	def __train_model(self, model: Model, full_name, X_train, y_train, X_test, y_test, nb_epoch = 300, callbacks=[]):
+		start_time = time.perf_counter()
+		history = model.fit(X_train, y_train, X_test, y_test, nb_epoch, callbacks)
+		duration = time.perf_counter() - start_time
+		model.evaluate(X_test, y_test)
 
-		save_path = f"{self.__model_directory()}/{full_name}.keras"
-		model.save(save_path)
+		save_path = model.save(f"{self.__model_directory()}/{full_name}")
 		print(f"\"{save_path}\" saved.")
 		try: os.remove(f"{self.__model_directory()}/{full_name}.claim")
 		except OSError: pass
-		return monitoring_data
+		return history, duration
 
-	def __save_all(self, monitoring_data, full_name, classes, monitoring_path, model, X_test, y_test):
+	def __save_all(self, history, full_name, classes, class_names, monitoring_path, model: Model, X_test, y_test):
 		# Per epoch metrics
 		training_evolution = (
-			pandas.DataFrame(monitoring_data.history)
+			pandas.DataFrame(history)
 				.rename_axis("epoch")
 				.reset_index()
 		)
 		training_evolution.insert(0, "model", full_name)
 		self.__save_one(training_evolution, "metrics", monitoring_path)
 		# Convolution matrix
-		prediction = np.argmax(model.predict(X_test, verbose=0), axis=1)
+		prediction = model.predict(X_test)
 		confusion_matrix = sklearn.metrics.confusion_matrix(y_test, prediction, labels=range(len(classes)))
 		confusion_data = []
 		for i, j in itertools.product(range(len(classes)), repeat=2):
 			confusion_data.append({
 			"model": full_name,
-			"wanted": classes[i],
-			"prediction": classes[j],
+			"wanted": class_names[i],
+			"prediction": class_names[j],
 			"count": int(confusion_matrix[i, j])
 		})
 		confusion_dataframe = pandas.DataFrame(confusion_data)
@@ -88,43 +90,27 @@ class MonitorModel:
 		Path(monitoring_path).mkdir(parents=True, exist_ok=True)
 		monitor_dataframe.to_csv(f"{monitoring_path}/{title}.csv", index=False)
 
-	def __save_model_params(self, model, full_name, nb_epoch, classes, callbacks, monitoring_path):
+	def __save_model_params(self, model: Model, full_name, nb_epoch, classes, callbacks, monitoring_path, duration):
 		model_params = {
 			"model": full_name,
 			"epochs": nb_epoch,
 			"classes": classes,
 			"callbacks": callbacks,
-			"learning_rate": float(model.optimizer.learning_rate.numpy()),
+			"learning_rate": model.learning_rate(),
+			"training_duration": str(timedelta(seconds=duration)),
 			"shape": {
-				"input": model.input_shape[1:]
+				"input": model.input_shape()
 			}
 		}
-		for i, layer in enumerate(model.layers):
-			model_params["shape"][f"layer_{i}"] = self.__describe(layer)
-		json.dump(
-			model_params, 
-			open(f"{monitoring_path}/params.json", "w"),
-			default=lambda obj: self.__serialize(obj),
-			indent=4
-		)
-
-	def __describe(self, layer):
-		t = type(layer).__name__
-		desc = {"type": t}
-		if hasattr(layer, "filters"): # Convo2D/1D...
-			desc["size"] = layer.filters
-			desc["kernel"] = layer.kernel_size
-			desc["stride"] = layer.strides
-			return desc
-		if hasattr(layer, "units"): # Dense
-			desc["size"] = layer.units
-			return desc
-		if hasattr(layer, "pool_size"): # MaxPooling
-			desc["pool"] = layer.pool_size
-			return desc
-		if hasattr(layer, "rate"): # Dropout
-			desc["rate"] = layer.rate
-		return desc
+		for i, layer in enumerate(model.describe_layers()):
+			model_params["shape"][f"layer_{i}"] = layer
+		with open(f"{monitoring_path}/params.json", "w") as file:
+			json.dump(
+				model_params,
+				file,
+				default=lambda obj: self.__serialize(obj),
+				indent=4
+			)
 
 	def __serialize(self, value):
 		if hasattr(value, "tolist"):

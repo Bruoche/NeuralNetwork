@@ -1,4 +1,4 @@
-import os, shutil
+import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -6,6 +6,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import numpy as np
 from trainer.monitor import MonitorModel
+from trainer.model import TensorModel
 import combination
 
 tf.keras.utils.set_random_seed(67)
@@ -55,4 +56,4 @@ for i in iterator:
 	)
 
 	monitor = MonitorModel("mnist_iterator", 1)
-	monitor.train(model, X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[early_stopping])
+	monitor.train(TensorModel(model), X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[early_stopping])

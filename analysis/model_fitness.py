@@ -11,7 +11,7 @@ from trainer.monitor import MonitorModel
 from pathlib import Path
 
 prefix = sys.argv[1] if len(sys.argv) > 1 else ""
-paths = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/{prefix}*/metrics.csv"))
+paths = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/*/{prefix}*/metrics.csv"))
 if not paths:
 	sys.exit(f"No model found for \"{prefix}\".")
 all_metrics = pandas.read_csv(paths[-1])

@@ -1,0 +1,48 @@
+{
+    "model": "object100_tf_mobilenet_v2_00_00",
+    "epochs": 27,
+    "classes": [
+        0,
+        1,
+        2,
+        3,
+        4
+    ],
+    "callbacks": [
+        "<keras.src.callbacks.early_stopping.EarlyStopping object at 0x000001EF9D81D870>"
+    ],
+    "learning_rate": 0.0010000000474974513,
+    "shape": {
+        "input": [
+            512,
+            384,
+            3
+        ],
+        "layer_0": {
+            "type": "RandomRotation"
+        },
+        "layer_1": {
+            "type": "RandomZoom"
+        },
+        "layer_2": {
+            "type": "RandomTranslation"
+        },
+        "layer_3": {
+            "type": "Lambda"
+        },
+        "layer_4": {
+            "type": "Functional"
+        },
+        "layer_5": {
+            "type": "GlobalAveragePooling2D"
+        },
+        "layer_6": {
+            "type": "Dropout",
+            "rate": 0.3
+        },
+        "layer_7": {
+            "type": "Dense",
+            "size": 5
+        }
+    }
+}

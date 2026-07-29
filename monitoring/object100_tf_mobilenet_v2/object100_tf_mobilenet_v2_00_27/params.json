@@ -1,0 +1,67 @@
+{
+    "model": "object100_tf_mobilenet_v2_00_27",
+    "epochs": 1,
+    "classes": [
+        "ecouteurs",
+        "keycap-puller",
+        "other",
+        "pc-stand",
+        "porte-mine"
+    ],
+    "callbacks": [
+        "<keras.src.callbacks.early_stopping.EarlyStopping object at 0x000001E6C4C25570>"
+    ],
+    "learning_rate": 4.999999873689376e-05,
+    "training_duration": "0:00:09.463986",
+    "shape": {
+        "input": [
+            224,
+            224,
+            3
+        ],
+        "layer_0": {
+            "type": "RandomFlip",
+            "mode": "horizontal"
+        },
+        "layer_1": {
+            "type": "RandomRotation",
+            "factor": [
+                -0.15,
+                0.15
+            ],
+            "fill_mode": "reflect"
+        },
+        "layer_2": {
+            "type": "RandomZoom",
+            "height_factor": 0.1,
+            "width_factor": null,
+            "fill_mode": "reflect"
+        },
+        "layer_3": {
+            "type": "RandomTranslation",
+            "height_factor": 0.1,
+            "width_factor": 0.1,
+            "fill_mode": "reflect"
+        },
+        "layer_4": {
+            "type": "Rescaling"
+        },
+        "layer_5": {
+            "type": "Functional",
+            "base_model": "mobilenetv2_1.00_224",
+            "size": 2257984,
+            "trainable": false
+        },
+        "layer_6": {
+            "type": "GlobalAveragePooling2D"
+        },
+        "layer_7": {
+            "type": "Dropout",
+            "rate": 0.3
+        },
+        "layer_8": {
+            "type": "Dense",
+            "size": 5
+        }
+    }
+}

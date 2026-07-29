@@ -1,0 +1,80 @@
+{
+    "model": "object100_pt_mobilenet_v2_01_106",
+    "epochs": 28,
+    "classes": [
+        "ecouteurs",
+        "keycap-puller",
+        "other",
+        "pc-stand",
+        "porte-mine"
+    ],
+    "callbacks": [
+        "EarlyStopping(monitor=val_loss, patience=5, restore_best_weights=True)"
+    ],
+    "learning_rate": 0.0005,
+    "training_duration": "0:00:29.116428",
+    "shape": {
+        "input": [
+            224,
+            224,
+            3
+        ],
+        "layer_0": {
+            "type": "RandomAffine",
+            "degrees": [
+                0.0,
+                0.0
+            ],
+            "translate": [
+                0.1,
+                0.1
+            ],
+            "scale": [
+                1.0,
+                1.0
+            ]
+        },
+        "layer_1": {
+            "type": "RandomHorizontalFlip",
+            "p": 0.5
+        },
+        "layer_2": {
+            "type": "Normalize",
+            "mean": [
+                0.485,
+                0.456,
+                0.406
+            ],
+            "std": [
+                0.229,
+                0.224,
+                0.225
+            ]
+        },
+        "layer_3": {
+            "type": "MobileNetV2",
+            "base_model": "mobilenet_v2",
+            "size": 2223872,
+            "trainable": false
+        },
+        "layer_4": {
+            "type": "GlobalAveragePooling2D"
+        },
+        "layer_5": {
+            "type": "Dense",
+            "size": 256
+        },
+        "layer_6": {
+            "type": "Dense",
+            "size": 256
+        },
+        "layer_7": {
+            "type": "Dropout",
+            "rate": 0.3
+        },
+        "layer_8": {
+            "type": "Dense",
+            "size": 5
+        }
+    }
+}

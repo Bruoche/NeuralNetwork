@@ -6,6 +6,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import numpy as np
 from trainer.monitor import MonitorModel
+from trainer.model import TensorModel
 
 
 (X_train, y_train), (X_test, y_test) = tf.keras.datasets.mnist.load_data()
@@ -43,4 +44,4 @@ early_stopping = tf.keras.callbacks.EarlyStopping(
 )
 
 monitor = MonitorModel("mnist_composite", 1)
-monitor.train(model, X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[tensorboard_callback, early_stopping])
+monitor.train(TensorModel(model), X_train, y_train, X_test, y_test, nb_epoch=200, callbacks=[tensorboard_callback, early_stopping])

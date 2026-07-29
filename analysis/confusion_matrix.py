@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from trainer.monitor import MonitorModel
 
 prefix = sys.argv[1] if len(sys.argv) > 1 else ""
-paths_metrics = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/{prefix}*/confusion.csv"))
+paths_metrics = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/*/{prefix}*/confusion.csv"))
 if not paths_metrics:
 	sys.exit(f"No model found for \"{prefix}\".")
 path = paths_metrics[-1]
