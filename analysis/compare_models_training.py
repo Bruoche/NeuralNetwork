@@ -13,6 +13,8 @@ from pathlib import Path
 METRIC_SHOWN = "val_loss"
 
 prefix = sys.argv[1] if len(sys.argv) > 1 else ""
+# optional 2nd arg: only plot the N best models (0 / absent = plot all)
+limit = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 
 paths = sorted(glob.glob(f"{MonitorModel.MONITORING_DIR}/*/{prefix}*/metrics.csv"))
 if not paths:
@@ -20,19 +22,18 @@ if not paths:
 
 all_metrics = pandas.concat([pandas.read_csv(path) for path in paths], ignore_index=True)
 bests = all_metrics.groupby("model")[METRIC_SHOWN].min().sort_values()
+total_models = len(bests)
+if limit > 0:
+	bests = bests.head(limit)
 
 PLOT_WIDTH, PLOT_HEIGHT, LEGEND_FONT = 9, 5, 7
-MAX_LEGEND_WIDTH = 9  # inches, so the window still fits on a screen
+MAX_LEGEND_WIDTH = 9
 
-# the part of the name shared by every model is already in the title: drop it
-# from the labels so long names stay readable in the legend
-common = os.path.commonprefix(list(bests.index))
-common = common[:common.rfind("_") + 1]
-labels = {model: f"{bests[model]:.4f}: {model[len(common):] or model}" for model in bests.index}
+# strip the CLI prefix (already shown in the title) so labels stay readable and
+# consistent regardless of how many models are plotted; keep the rest of the name
+labels = {model: f"{bests[model]:.4f}: {model[len(prefix):].lstrip('_') or model}"
+		  for model in bests.index}
 
-# size the legend from what actually fits next to the plot: a full label per
-# column, as many rows as the figure is tall. Past that only the best models
-# get a legend entry (the others are still plotted).
 column_width = 0.6 + max(len(label) for label in labels.values()) * LEGEND_FONT * 0.6 / 72
 rows = max(1, int(PLOT_HEIGHT / (LEGEND_FONT * 1.6 / 72)))
 max_columns = max(1, int(MAX_LEGEND_WIDTH / column_width))
@@ -49,8 +50,12 @@ for model in bests.index:
 ax.set_xlabel("Epoch")
 ax.set_ylabel("Loss (test)")
 hidden = len(bests) - len(labelled)
-ax.set_title(f"{prefix}* - Fitness Comparisons"
-			 + (f" (legend: best {len(labelled)} of {len(bests)})" if hidden else ""))
+title = f"{prefix}* - Fitness Comparisons"
+if limit > 0 and len(bests) < total_models:
+	title += f" (best {len(bests)} of {total_models})"
+if hidden:
+	title += f" (legend: {len(labelled)} shown)"
+ax.set_title(title)
 ax.legend(
 	fontsize=LEGEND_FONT,
 	loc="upper left",
@@ -59,16 +64,13 @@ ax.legend(
 )
 ax.grid(alpha=.3)
 ax.set_yscale("log")
-best = bests.min()
-if len(bests) >= 4:
-	q1, q3 = bests.quantile([0.25, 0.75])
-	worst_shown = bests[bests <= q3 + 1.5 * (q3 - q1)].max()
-else:
-	worst_shown = bests.max()
-ax.set_ylim(worst_shown * 1.3, best * 0.95)
+# y-limits span the full curves of the plotted models: top = best value seen,
+# bottom = the biggest value seen (the worst plotted curve's peak), so each
+# shown model is visible start-to-finish. Axis is inverted (lower loss = up).
+# Narrow the plotted set with the 2nd CLI arg to keep bad runs from stretching it.
+shown = all_metrics[all_metrics.model.isin(bests.index)][METRIC_SHOWN]
+ax.set_ylim(shown.max() * 1.05, shown.min() * 0.95)
 
-# tight_layout ignores artists placed outside the axes, so reserve the legend
-# strip by hand instead: everything right of `right` is legend space
 fig.subplots_adjust(left=0.9 / fig.get_figwidth(), right=1 - legend_width / fig.get_figwidth())
 Path(consts.GRAPHS_DIR).mkdir(parents=True, exist_ok=True)
 normalized_prefix = re.sub(r'[^\w.-]', "_", prefix).strip("_").lstrip("_")
