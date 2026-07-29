@@ -40,8 +40,10 @@ class MonitorModel:
 		major_name = f"{self.model_name}_{format(self.major_version, '02d')}"
 		version = len(glob.glob(f"{self.__model_directory()}/{major_name}_*"))
 		full_name = f"{major_name}_{format(version, '02d')}"
+		claim_path = f"versions/{full_name}.claim"
+		Path(claim_path).mkdir(parents=True, exist_ok=True)
 		try:
-			open(f"{self.__model_directory()}/{full_name}.claim", 'x').close()
+			open(claim_path, 'x').close()
 		except FileExistsError:
 			if retry > MonitorModel.MAX_RETRIES:
 				raise ValueError(f"Failed to claim a version for the model after {retry} retries.")
@@ -59,8 +61,6 @@ class MonitorModel:
 
 		save_path = model.save(f"{self.__model_directory()}/{full_name}")
 		print(f"\"{save_path}\" saved.")
-		try: os.remove(f"{self.__model_directory()}/{full_name}.claim")
-		except OSError: pass
 		return history, duration
 
 	def __save_all(self, history, full_name, classes, class_names, monitoring_path, model: Model, X_test, y_test):
