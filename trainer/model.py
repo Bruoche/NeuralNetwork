@@ -122,13 +122,15 @@ class TorchModel(Model):
 
 	BATCH_SIZE = 32       # tf.keras model.fit default
 	DROPOUT = 0.3
+	INPUT_SIZE = 224      # square input side fed to the backbone
 	# torchvision transform attributes worth reporting, in output order
 	AUGMENT_ATTRS = ("p", "degrees", "translate", "scale", "ratio", "shear",
 					 "size", "brightness", "contrast", "saturation", "hue",
 					 "kernel_size", "sigma", "distortion_scale")
 
 	def __init__(self, num_classes, augment=[], hidden=[], lr=1e-3,
-				 device=None, patience=5, fine_tune=0, fine_tune_lr=None):
+				 device=None, patience=5, fine_tune=0, fine_tune_lr=None,
+				 base=None, base_weights=None):
 		import torch
 		from torch import nn
 		from torchvision import models, transforms
@@ -147,18 +149,33 @@ class TorchModel(Model):
 		self.fine_tune = fine_tune
 		self.fine_tune_lr = fine_tune_lr if fine_tune_lr is not None else lr / 10
 
-		weights = models.MobileNet_V2_Weights.IMAGENET1K_V1
-		base = models.mobilenet_v2(weights=weights)
-		self.backbone = base.features                 # conv feature extractor
+		# base model (backbone). Defaults to MobileNetV2, but any torchvision
+		# classification model + its weights can be injected from the caller,
+		# e.g. base=models.resnet18, base_weights=models.ResNet18_Weights.IMAGENET1K_V1
+		if base is None:
+			base, base_weights = models.mobilenet_v2, models.MobileNet_V2_Weights.IMAGENET1K_V1
+		network = base(weights=base_weights)
+		self.base_name = type(network).__name__
+		# feature extractor: use .features when present (mobilenet, efficientnet,
+		# vgg, densenet, convnext...), otherwise drop the final classifier child
+		# (resnet, regnet, googlenet...) to keep just the conv trunk
+		if hasattr(network, "features"):
+			self.backbone = network.features
+		else:
+			self.backbone = nn.Sequential(*list(network.children())[:-1])
 		for p in self.backbone.parameters():
 			p.requires_grad = False                    # phase 1: backbone fully frozen
 		# backbone stays in eval() at all times so its BatchNorm running stats
 		# remain frozen even while fine-tuning (matches keras base(training=False))
 		self.backbone.eval()
-		self.pool = nn.AdaptiveAvgPool2d(1)           # GlobalAveragePooling2D -> 1280
+		self.pool = nn.AdaptiveAvgPool2d(1)           # GlobalAveragePooling2D
+
+		# feature width discovered by a dummy forward, so any architecture works
+		with torch.no_grad():
+			side = TorchModel.INPUT_SIZE
+			in_features = self._nn.Flatten()(self.pool(self.backbone(torch.zeros(1, 3, side, side)))).shape[1]
 
 		head_layers = []
-		in_features = self.backbone[-1].out_channels  # 1280 for MobileNetV2
 		for h in self.hidden:
 			head_layers += [nn.Linear(in_features, h), nn.ReLU()]
 			in_features = h
@@ -176,11 +193,11 @@ class TorchModel(Model):
 		self.optimizer = torch.optim.Adam(self.head.parameters(), lr=lr)
 		self.loss_fn = nn.CrossEntropyLoss()
 
-		# preprocessing: normalize with the backbone's own ImageNet stats
-		# (torch's equivalent of the keras Rescaling(1/127.5, -1) that matched
-		# the TF MobileNetV2 pretraining)
-		self._mean = weights.transforms().mean
-		self._std = weights.transforms().std
+		# preprocessing: normalize with the backbone's own pretraining stats
+		# (torch's equivalent of the keras Rescaling that matched TF pretraining)
+		preprocess = base_weights.transforms()
+		self._mean = getattr(preprocess, "mean", [0.485, 0.456, 0.406])
+		self._std = getattr(preprocess, "std", [0.229, 0.224, 0.225])
 		self._normalize = transforms.Normalize(mean=self._mean, std=self._std)
 		self.augment = list(augment)
 		self._augment_tf = transforms.Compose(self.augment)
@@ -373,14 +390,14 @@ class TorchModel(Model):
 		return float(self.optimizer.param_groups[0]["lr"])
 
 	def input_shape(self):
-		return (224, 224, 3)
+		return (TorchModel.INPUT_SIZE, TorchModel.INPUT_SIZE, 3)
 
 	def describe_layers(self) -> list[dict]:
 		layers = self.describe_augments()
 		layers.append({"type": "Normalize", "mean": list(self._mean), "std": list(self._std)})
 		layers.append({
-			"type": "MobileNetV2",
-			"base_model": "mobilenet_v2",
+			"type": self.base_name,
+			"base_model": self.base_name,
 			"size": sum(p.numel() for p in self.backbone.parameters()),
 			"trainable": self.fine_tune > 0,
 			"fine_tune_blocks": self.fine_tune,
