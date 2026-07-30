@@ -39,7 +39,7 @@ optionalDepth = combination.Options([
 	[64, 64]
 ])
 learning_rates = combination.Options([0.0005, 0.0003])
-optionalFineTune = combination.Options([3, 2, 4, 0])
+optionalFineTune = combination.Options([4, 2]) # 3, 2, 
 optionalBase = combination.Options([tf.keras.applications.EfficientNetB0])
 
 iterator = combination.Iterator([optionalDepth, learning_rates, optionalFlip, optionalRotation, optionalTranslation, optionalScale, optionalFlipVertical, optionalFineTune, optionalBase])

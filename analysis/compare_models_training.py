@@ -31,7 +31,7 @@ MAX_LEGEND_WIDTH = 9
 
 # strip the CLI prefix (already shown in the title) so labels stay readable and
 # consistent regardless of how many models are plotted; keep the rest of the name
-labels = {model: f"{bests[model]:.4f}: {model[len(prefix):].lstrip('_') or model}"
+labels = {model: f"{bests[model]:.4f}: {model}"
 		  for model in bests.index}
 
 column_width = 0.6 + max(len(label) for label in labels.values()) * LEGEND_FONT * 0.6 / 72
