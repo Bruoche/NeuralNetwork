@@ -98,6 +98,9 @@ class TensorFactory(TrainerFactory):
 		import tensorflow as tf
 		return {
 			"efficientnet_b0": tf.keras.applications.EfficientNetB0,
+			"efficientnet_b2": tf.keras.applications.EfficientNetB2,
+			"efficientnet_b4": tf.keras.applications.EfficientNetB4,
+			"efficientnet_b7": tf.keras.applications.EfficientNetB7,
 			"mobilenet_v2": tf.keras.applications.MobileNetV2,
 		}
 
@@ -159,6 +162,9 @@ class TorchFactory(TrainerFactory):
 		from torchvision import models
 		return {
 			"efficientnet_b0": (models.efficientnet_b0, models.EfficientNet_B0_Weights.IMAGENET1K_V1),
+			"efficientnet_b2": (models.efficientnet_b2, models.EfficientNet_B2_Weights.IMAGENET1K_V1),
+			"efficientnet_b4": (models.efficientnet_b4, models.EfficientNet_B4_Weights.IMAGENET1K_V1),
+			"efficientnet_b7": (models.efficientnet_b7, models.EfficientNet_B7_Weights.IMAGENET1K_V1),
 			"mobilenet_v2": (models.mobilenet_v2, models.MobileNet_V2_Weights.IMAGENET1K_V1),
 		}
 

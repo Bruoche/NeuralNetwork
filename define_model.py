@@ -10,7 +10,7 @@ train(
 	dimensions=(224, 224), # Image dimensions
 	seed=67,
 	patience=10,
-	nb_epoch=1,
+	nb_epoch=300,
 	depth=combination.Options([  
 		[128],
 		[64, 64],
@@ -24,5 +24,5 @@ train(
 	scale=combination.Options([0.1]),                   # +/- zoom fraction
 	flip_vertical=combination.Options([0]),             # vertical flip probability (off)
 	fine_tune=combination.Options([4, 5, 3]),           # top backbone blocks to unfreeze
-	base=combination.Options(["efficientnet_b0"]),
+	base=combination.Options(["efficientnet_b0", "efficientnet_b2", "efficientnet_b4", "efficientnet_b7"]),
 )
